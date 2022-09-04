@@ -1,0 +1,6 @@
+venv/
+.idea/
+.vsc/
+.env
+secret.py
+test/*
