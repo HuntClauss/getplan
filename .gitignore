@@ -4,3 +4,4 @@ venv/
 .env
 secret.py
 test/*
+__pycache__/

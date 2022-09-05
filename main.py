@@ -20,8 +20,18 @@ class Lesson:
         self.subject_group = ''
 
 
+class Teacher:
+    def __init__(self):
+        self.fullname = ''
+        self.teaching_subjects = []
+        self.housemaster_of = None
+        self.lessons: list[Lesson] = []
+
+
 def process_timetable(url: str) -> list[Lesson]:
     resp = requests.get(url)
+    resp.encoding = 'utf-8'
+
     soup = BeautifulSoup(resp.text, 'html.parser')
 
     multiple_timetables = soup.find_all('div', class_='plan_plan')
@@ -33,6 +43,8 @@ def process_timetable(url: str) -> list[Lesson]:
 
 def process_staff_names(url: str) -> dict[str, str]:
     resp = requests.get(url)
+    resp.encoding = 'utf-8'
+
     soup = BeautifulSoup(resp.text, 'html.parser')
 
     return map_teacher_names(soup)
@@ -103,9 +115,31 @@ def lesson_details(s: str) -> (str, str, str):
     return group, teacher, classroom
 
 
+def teacher_base_timetable(lessons: list[Lesson], names: dict[str, str]) -> dict[str, Teacher]:
+    teachers: dict[str, Teacher] = {}
+    for lesson in lessons:
+        name = lesson.subject_teacher
+        if name in names:
+            name = names[name]  # TODO fix char encoding of lesson.subject_teacher
+
+        if name not in teachers:
+            teachers[name] = Teacher()
+
+        teachers[name].lessons.append(lesson)
+        teachers[name].fullname = name
+
+        if lesson.subject_name == 'zajęcia z wychowawcą':
+            teachers[name].housemaster_of = lesson.class_name
+        elif lesson.subject_name not in teachers[name].teaching_subjects:
+            teachers[name].teaching_subjects.append(lesson.subject_name)
+
+    return teachers
+
+
 def main():
     names = process_staff_names(STAFF_URL)
     lessons = process_timetable(TIMETABLE_URL)
+    teachers = teacher_base_timetable(lessons, names)
 
 
 if __name__ == '__main__':
