@@ -1,4 +1,4 @@
-name: lint *.py files 
+name: main-workflow 
 on: [push]
 jobs:
   build:
