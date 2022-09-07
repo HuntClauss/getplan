@@ -1,6 +1,8 @@
 import bs4
 import requests
-from secret import TIMETABLE_URL, STAFF_URL
+
+from duty import get_duty_plan
+from secret import TIMETABLE_URL, STAFF_URL, TEACHERS_DUTY_URL
 import re
 from bs4 import BeautifulSoup
 
@@ -22,10 +24,14 @@ class Lesson:
 
 class Teacher:
     def __init__(self):
-        self.fullname = ''
+        self.display_name = ''
+        self.true_name = ''
         self.teaching_subjects = []
         self.housemaster_of = None
         self.lessons: list[Lesson] = []
+
+    def is_vacancy(self):
+        return 'wakat' in self.display_name.lower()
 
 
 def process_timetable(url: str) -> list[Lesson]:
@@ -118,7 +124,7 @@ def lesson_details(s: str) -> (str, str, str):
 def teacher_base_timetable(lessons: list[Lesson], names: dict[str, str]) -> dict[str, Teacher]:
     teachers: dict[str, Teacher] = {}
     for lesson in lessons:
-        name = lesson.subject_teacher
+        name = lesson.subject_teacher.strip('. \t\n')
         if name in names:
             name = names[name]  # TODO fix char encoding of lesson.subject_teacher
 
@@ -126,7 +132,8 @@ def teacher_base_timetable(lessons: list[Lesson], names: dict[str, str]) -> dict
             teachers[name] = Teacher()
 
         teachers[name].lessons.append(lesson)
-        teachers[name].fullname = name
+        teachers[name].display_name = name
+        teachers[name].true_name = name
 
         if lesson.subject_name == 'zajęcia z wychowawcą':
             teachers[name].housemaster_of = lesson.class_name
@@ -136,10 +143,79 @@ def teacher_base_timetable(lessons: list[Lesson], names: dict[str, str]) -> dict
     return teachers
 
 
+def vacancy_educated_guesses(teachers: dict[str, Teacher], mapped_names: dict[str, str]):
+    names = list(mapped_names.values())
+
+    targets: list[Teacher] = []
+    for t in teachers.values():
+        if t.is_vacancy() and '.' not in t.display_name:
+            targets.append(t)
+
+    # Wakat-UC .
+    # Wakat-AS_NIEM .
+    # Wakat-DS_INF .
+    # Wakat PEL_INF.
+    # Wakat-J.ANG_INF .
+    # Wakat-MKRA_EDB_WF .
+    # formats:
+    #   [J]an [K]owalski -> JK
+    #   Jan [Kow]alski -> KOW
+    for t in targets:
+        mark = t.display_name[6:]
+        if '_' in mark:
+            end = mark.index('_')
+            mark = mark[:end]
+
+        matches: list[str] = []
+        if len(mark) == 2:
+            matches = find_initials_matches(mark, names)
+        else:
+            matches = find_last_name_matches(mark, names)
+
+        if len(matches) > 1:
+            for m in matches:
+                if not any(subject in teachers[m].teaching_subjects for subject in t.teaching_subjects):
+                    matches.remove(m)
+
+        if len(matches) == 1:
+            t.true_name = matches[0]
+
+
+def find_initials_matches(initials: str, names: list[str]) -> list[str]:
+    result: list[str] = []
+    for name in names:
+        parts = name.split(' ')  # parts[0] = last_name, parts[1] = first_name
+        s, f = parts[0][0], parts[1][0]
+        if f == initials[0] and s == initials[1]:
+            result.append(name)
+
+    return result
+
+
+def find_last_name_matches(part: str, names: list[str]) -> list[str]:
+    result: list[str] = []
+    for name in names:
+        last_name = name.split(' ')[0]
+        if last_name.startswith(part):
+            result.append(name)
+
+    return result
+
+
+def resolve_teachers_names(lessons: list[Lesson], names: dict[str, str]) -> list[Lesson]:
+    for lesson in lessons:
+        if lesson.subject_teacher in names:
+            lesson.subject_teacher = names[lesson.subject_teacher]
+    return lessons
+
+
 def main():
-    names = process_staff_names(STAFF_URL)
+    get_duty_plan(TEACHERS_DUTY_URL)
+    names_map = process_staff_names(STAFF_URL)
     lessons = process_timetable(TIMETABLE_URL)
-    teachers = teacher_base_timetable(lessons, names)
+    resolve_teachers_names(lessons, names_map)
+    teachers = teacher_base_timetable(lessons, names_map)
+    vacancy_educated_guesses(teachers, names_map)
 
 
 if __name__ == '__main__':
