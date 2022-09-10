@@ -1,7 +1,6 @@
 import bs4
 import requests
-from bs4 import BeautifulSoup
-from secret import TEACHERS_DUTY_URL
+
 
 
 class Duty:
@@ -15,7 +14,7 @@ def get_duty_plan(url: str) -> dict[str, list[Duty]]:
     resp = requests.get(url)
     resp.encoding = 'utf-8'
 
-    soup = BeautifulSoup(resp.text, 'html.parser')
+    soup = bs4.BeautifulSoup(resp.text, 'html.parser')
     iframe = soup.find('iframe', id='result')
 
     return parse_duty_plan(iframe)
@@ -40,7 +39,7 @@ def parse_duty_plan(body: bs4.Tag) -> dict[str, list[Duty]]:
     print('For safety measures review it in terms of malicious code.')
     decision = str(input('> Execute code? [y/N]: ')).lower().strip()
 
-    if decision != 'y' and decision != 'yes':
+    if decision not in ('y', 'yes'):
         print('terminating... possibility of malicious code')
         exit(1)
 
@@ -97,7 +96,7 @@ def parse_duty_plan(body: bs4.Tag) -> dict[str, list[Duty]]:
             if cell[1] not in duty_map:
                 duty_map[cell[1]] = []
 
-            for i in range(cell[0]):
+            for _ in range(cell[0]):
                 time_index += 1
                 duty_map[cell[1]].append(Duty(day_index, time_index, place))
 
@@ -106,10 +105,3 @@ def parse_duty_plan(body: bs4.Tag) -> dict[str, list[Duty]]:
         final_duty_map[initials_to_name[k]] = v
 
     return final_duty_map
-
-
-
-
-
-
-

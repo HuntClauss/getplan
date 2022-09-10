@@ -1,10 +1,9 @@
+import re
 import bs4
 import requests
 
-from duty import get_duty_plan
 from secret import TIMETABLE_URL, STAFF_URL, TEACHERS_DUTY_URL
-import re
-from bs4 import BeautifulSoup
+from duty import get_duty_plan
 
 POLISH_UPPERCASE = 'ĄĆĘŁŃÓŚÓŻŹ'
 POLISH_LOWERCASE = 'ąćęłńóśóżź'
@@ -38,7 +37,7 @@ def process_timetable(url: str) -> list[Lesson]:
     resp = requests.get(url)
     resp.encoding = 'utf-8'
 
-    soup = BeautifulSoup(resp.text, 'html.parser')
+    soup = bs4.BeautifulSoup(resp.text, 'html.parser')
 
     multiple_timetables = soup.find_all('div', class_='plan_plan')
     lessons: list[Lesson] = []
@@ -51,7 +50,7 @@ def process_staff_names(url: str) -> dict[str, str]:
     resp = requests.get(url)
     resp.encoding = 'utf-8'
 
-    soup = BeautifulSoup(resp.text, 'html.parser')
+    soup = bs4.BeautifulSoup(resp.text, 'html.parser')
 
     return map_teacher_names(soup)
 
@@ -61,7 +60,8 @@ def map_teacher_names(table: bs4.Tag) -> dict[str, str]:
     cells = table.find_all('td')
     for i in range(0, len(cells), 2):
         text = cells[i].get_text(strip=True)
-        text = text.replace('dr', '').replace('hab.', '').replace('inż.', '').replace('ks.', '').strip()
+        text = text.replace('dr', '').replace('hab.', '')
+        text = text.replace('inż.', '').replace('ks.', '').strip()
         end = text.index(' ') + 2
         result[f'{text[:end]}.'] = text
     return result
