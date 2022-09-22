@@ -1,13 +1,23 @@
+import collections
+import json
+from pprint import pprint
+
 import bs4
 import requests
 
+import const
 
 
 class Duty:
-    def __init__(self, day_index, time_index, place):
+    def __init__(self, day_index, time_index, place_index):
         self.day_index = day_index
         self.time_index = time_index
-        self.place = place
+        self.place_index = place_index
+
+
+class DutyEncoder(json.JSONEncoder):
+    def default(self, o):
+        return o.__dict__
 
 
 def get_duty_plan(url: str) -> dict[str, list[Duty]]:
@@ -47,21 +57,6 @@ def parse_duty_plan(body: bs4.Tag) -> dict[str, list[Duty]]:
     exec(js_code, {"__builtins__": {}}, loc)  # loc['p']
     rows = loc['p']
 
-    mapped_days = {'Poniedziałek': 0, 'Wtorek': 1, 'Środa': 2, 'Czwartek': 3, 'Piątek': 4}
-    mapped_place = {
-        'bufet#toaleta': 'bufet - łazienka',
-        'bufet#jadalnia': 'bufet - jadalnia',
-        'korytarz#02#021': 'korytarz 02 - 021',
-        'korytarz#06#09#013': 'korytarz 06 - 013',
-        'parter#wejście': 'główne wejście',
-        'parter#2': 'hol przy wejściu',
-        'piętro1#toaleta': 'piętro 1 - łazienka',
-        'piętro1#2osoba': 'piętro 1 - narożnik',
-        'piętro2#toaleta': 'piętro 2 - łazienka',
-        'piętro2#2osoba': 'piętro 2 - narożnik',
-        'szatnia#tech': 'szatnia tech',  # gdzie to jest?
-    }
-
     duty_map: dict[str, list[Duty]] = {}
     initials_to_name: dict[str, str] = {}
 
@@ -69,7 +64,7 @@ def parse_duty_plan(body: bs4.Tag) -> dict[str, list[Duty]]:
         if len(row) < 3:
             continue
 
-        if len(row[-2]) != len(row[-3]) != 3:
+        if row[-1][0] > 1 or len(row[-2]) != len(row[-3]) != 3:
             continue
         initials = row[-2][1]
         fullname = row[-3][1]
@@ -78,12 +73,12 @@ def parse_duty_plan(body: bs4.Tag) -> dict[str, list[Duty]]:
         if len(row[1]) != len(row[2]) != 3:
             continue
 
-        if row[1][1] not in mapped_days or row[2][1] not in mapped_place:
+        if row[1][1] not in const.day_to_index or row[2][1] not in const.raw_place_to_index:
             continue
 
         time_index = -1
-        day_index = mapped_days[row[1][1]]
-        place = mapped_place[row[2][1]]
+        day_index = const.day_to_index[row[1][1]]
+        place = const.raw_place_to_index[row[2][1]]
 
         curr_index = 2
         while time_index < 10:
@@ -105,3 +100,36 @@ def parse_duty_plan(body: bs4.Tag) -> dict[str, list[Duty]]:
         final_duty_map[initials_to_name[k]] = v
 
     return final_duty_map
+
+
+def duty_map_to_json(duties: dict[str, list[Duty]]):
+    reformat = {}
+    for k, v in duties.items():
+        for elem in v:
+            if elem.day_index not in reformat:
+                reformat[elem.day_index] = {}
+            if elem.time_index not in reformat[elem.day_index]:
+                reformat[elem.day_index][elem.time_index] = [None] * len(const.index_to_formatted_place)
+
+            reformat[elem.day_index][elem.time_index][elem.place_index] = {
+                'place': const.index_to_formatted_place[elem.place_index],
+                'person': k
+            }
+
+    reformat = remove_empty_elements(reformat)
+    with open('out/duties.json', 'w', encoding='utf-8') as f:
+        json.dump(reformat, f, ensure_ascii=False, cls=DutyEncoder)
+
+
+def remove_empty_elements(d):
+    """recursively remove empty lists, empty dicts, or None elements from a dictionary"""
+
+    def empty(x):
+        return x is None or x == {} or x == []
+
+    if not isinstance(d, (dict, list)):
+        return d
+    elif isinstance(d, list):
+        return [v for v in (remove_empty_elements(v) for v in d) if not empty(v)]
+    else:
+        return {k: v for k, v in ((k, remove_empty_elements(v)) for k, v in d.items()) if not empty(v)}

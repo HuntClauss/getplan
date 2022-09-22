@@ -3,7 +3,7 @@ import bs4
 import requests
 
 from secret import TIMETABLE_URL, STAFF_URL, TEACHERS_DUTY_URL
-from duty import get_duty_plan
+from duty import get_duty_plan, duty_map_to_json
 
 POLISH_UPPERCASE = 'ĄĆĘŁŃÓŚÓŻŹ'
 POLISH_LOWERCASE = 'ąćęłńóśóżź'
@@ -210,7 +210,9 @@ def resolve_teachers_names(lessons: list[Lesson], names: dict[str, str]) -> list
 
 
 def main():
-    get_duty_plan(TEACHERS_DUTY_URL)
+    duties = get_duty_plan(TEACHERS_DUTY_URL)
+    duty_map_to_json(duties)
+    return
     names_map = process_staff_names(STAFF_URL)
     lessons = process_timetable(TIMETABLE_URL)
     resolve_teachers_names(lessons, names_map)

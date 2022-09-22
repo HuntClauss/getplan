@@ -5,3 +5,4 @@ venv/
 secret.py
 test/*
 __pycache__/
+out/
